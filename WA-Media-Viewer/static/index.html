@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepView - Media Viewer</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <h1>DeepView - Galleria Media</h1>
+    <div id="filters">
+        <select id="filter-type">
+            <option value="">Tutti</option>
+            <option value="image/">Immagini</option>
+            <option value="video/">Video</option>
+            <option value="audio/">Audio</option>
+        </select>
+        <input type="date" id="filter-date">
+    </div>
+    <div id="gallery"></div>
+    <div id="load-more"></div>
+    <div id="lightbox">
+        <div id="lightbox-content"></div>
+    </div>
+    <script src="js/main.js"></script>
+</body>
+</html>

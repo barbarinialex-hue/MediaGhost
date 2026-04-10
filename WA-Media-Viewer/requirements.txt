@@ -1,0 +1,4 @@
+Flask==2.3.3
+Pillow==10.0.0
+python-magic==0.4.27
+exifread==3.0.0
