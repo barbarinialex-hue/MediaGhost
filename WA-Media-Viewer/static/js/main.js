@@ -3,14 +3,19 @@ const state = {
     activeType: '',
     searchText: '',
     sortBy: 'newest',
-    currentLightboxIndex: 0
+    currentAlbum: '',
+    currentLightboxIndex: 0,
+    mediaRoot: ''
 };
 
 const fileInput = document.getElementById('file-input');
 const selectFilesBtn = document.getElementById('select-files-btn');
+const folderPathInput = document.getElementById('folder-path-input');
+const setFolderBtn = document.getElementById('set-folder-btn');
 const searchInput = document.getElementById('search-input');
 const sortBySelect = document.getElementById('sort-by');
 const uploadStatus = document.getElementById('upload-status');
+const breadcrumb = document.getElementById('breadcrumb');
 const gallery = document.getElementById('gallery');
 const totalCount = document.getElementById('total-count');
 const imageCount = document.getElementById('image-count');
@@ -26,6 +31,7 @@ const lightboxClose = document.getElementById('lightbox-close');
 
 selectFilesBtn.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', handleFileSelect);
+setFolderBtn.addEventListener('click', setMediaFolder);
 searchInput.addEventListener('input', handleSearch);
 sortBySelect.addEventListener('change', handleSort);
 
@@ -54,11 +60,50 @@ document.addEventListener('keydown', event => {
 async function loadMedia() {
     try {
         const response = await fetch('/api/media');
-        state.allMedia = await response.json();
+        const result = await response.json();
+        state.allMedia = result.media || [];
+        state.mediaRoot = result.root || state.mediaRoot;
         renderGallery();
     } catch (error) {
         gallery.innerHTML = '<p class="empty-state">Errore nel caricamento dei media.</p>';
     }
+}
+
+async function setMediaFolder() {
+    const root = folderPathInput.value.trim();
+    if (!root) {
+        uploadStatus.textContent = 'Inserisci prima il percorso della cartella.';
+        uploadStatus.classList.add('active');
+        setTimeout(() => {
+            uploadStatus.textContent = '';
+            uploadStatus.classList.remove('active');
+        }, 3000);
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/set-root', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ root })
+        });
+        const result = await response.json();
+        if (result.success) {
+            uploadStatus.textContent = `Cartella impostata su: ${result.root}`;
+            await loadMedia();
+        } else {
+            uploadStatus.textContent = result.error || 'Errore impostando la cartella.';
+        }
+    } catch (error) {
+        console.error('Set folder failed:', error);
+        uploadStatus.textContent = 'Errore di connessione durante l’impostazione della cartella.';
+    }
+
+    uploadStatus.classList.add('active');
+    setTimeout(() => {
+        uploadStatus.textContent = '';
+        uploadStatus.classList.remove('active');
+    }, 4000);
 }
 
 function formatDateLabel(date) {
@@ -99,7 +144,7 @@ function sortItems(items) {
     });
 }
 
-function filterItems() {
+function getFilteredItems() {
     return sortItems(state.allMedia).filter(item => {
         if (state.activeType && !item.mime.startsWith(state.activeType)) return false;
         if (state.searchText) {
@@ -110,37 +155,111 @@ function filterItems() {
     });
 }
 
-function renderGallery() {
-    const items = filterItems();
-    gallery.innerHTML = '';
-    updateStats(items);
+function getVisibleMediaItems() {
+    return getFilteredItems().filter(item => item.folder === state.currentAlbum);
+}
 
-    if (!items.length) {
-        gallery.innerHTML = '<p class="empty-state">Nessun file trovato. Prova a cambiare filtro o importa nuovi media.</p>';
+function getAlbumsForCurrentFolder(items) {
+    const prefix = state.currentAlbum ? `${state.currentAlbum}/` : '';
+    const albums = {};
+
+    items.forEach(item => {
+        if (!item.folder.startsWith(prefix) || item.folder === state.currentAlbum) return;
+        const remainder = item.folder.slice(prefix.length);
+        const segments = remainder.split('/').filter(Boolean);
+        if (!segments.length) return;
+        const childPath = prefix + segments[0];
+        if (!albums[childPath]) {
+            albums[childPath] = {
+                path: childPath,
+                label: segments[0],
+                count: 0
+            };
+        }
+        albums[childPath].count += 1;
+    });
+
+    return Object.values(albums).sort((a, b) => a.label.localeCompare(b.label, 'it', { numeric: true, sensitivity: 'base' }));
+}
+
+function renderBreadcrumb() {
+    if (!breadcrumb) return;
+
+    const rootLabel = state.mediaRoot ? `Cartella: ${state.mediaRoot}` : 'Radice';
+    if (!state.currentAlbum) {
+        breadcrumb.innerHTML = `<div class="breadcrumb-item active">${rootLabel}</div>`;
         return;
     }
 
-    const grouped = items.reduce((groups, item, index) => {
-        const label = formatDateLabel(parseItemDate(item));
-        if (!groups[label]) groups[label] = [];
-        groups[label].push({ item, index });
-        return groups;
-    }, {});
+    const segments = state.currentAlbum.split('/');
+    let path = '';
+    const items = segments.map((segment, index) => {
+        path = path ? `${path}/${segment}` : segment;
+        return `<button type="button" class="breadcrumb-item" data-path="${path}">${segment}</button>`;
+    });
 
-    Object.entries(grouped).forEach(([label, group]) => {
-        const section = document.createElement('section');
-        section.className = 'group-section';
-        section.innerHTML = `<div class="group-header"><h2>${label}</h2><span>${group.length} elementi</span></div>`;
+    breadcrumb.innerHTML = `
+        <button type="button" class="breadcrumb-item" data-path="">Radice</button>
+        <span class="breadcrumb-separator">/</span>
+        ${items.join('<span class="breadcrumb-separator">/</span>')}
+    `;
+
+    breadcrumb.querySelectorAll('.breadcrumb-item').forEach(button => {
+        button.addEventListener('click', () => {
+            state.currentAlbum = button.dataset.path;
+            renderGallery();
+        });
+    });
+}
+
+function renderGallery() {
+    const filteredItems = getFilteredItems();
+    const albums = getAlbumsForCurrentFolder(filteredItems);
+    const items = getVisibleMediaItems();
+
+    gallery.innerHTML = '';
+    renderBreadcrumb();
+    updateStats(items);
+
+    if (albums.length) {
+        const albumSection = document.createElement('section');
+        albumSection.className = 'group-section';
+        albumSection.innerHTML = `<div class="group-header"><h2>Album</h2><span>${albums.length} cartelle</span></div>`;
         const grid = document.createElement('div');
         grid.className = 'media-grid';
+        albums.forEach(album => grid.appendChild(createAlbumCard(album)));
+        albumSection.appendChild(grid);
+        gallery.appendChild(albumSection);
+    }
 
-        group.forEach(data => {
-            grid.appendChild(createMediaCard(data.item, data.index));
+    if (!items.length && !albums.length) {
+        gallery.innerHTML = '<p class="empty-state">Nessun media o album in questa cartella. Prova a selezionare un altro album o importa nuovi file.</p>';
+        return;
+    }
+
+    if (items.length) {
+        const grouped = items.reduce((groups, item, index) => {
+            const label = formatDateLabel(parseItemDate(item));
+            if (!groups[label]) groups[label] = [];
+            groups[label].push({ item, index });
+            return groups;
+        }, {});
+
+        Object.entries(grouped).forEach(([label, group]) => {
+            const section = document.createElement('section');
+            section.className = 'group-section';
+            section.innerHTML = `<div class="group-header"><h2>${label}</h2><span>${group.length} elementi</span></div>`;
+            const grid = document.createElement('div');
+            grid.className = 'media-grid';
+
+            group.forEach(data => {
+                grid.appendChild(createMediaCard(data.item, data.index));
+            });
+
+            section.appendChild(grid);
+            gallery.appendChild(section);
         });
-
-        section.appendChild(grid);
-        gallery.appendChild(section);
-    });
+    }
 }
 
 function createMediaCard(item, index) {
@@ -155,7 +274,7 @@ function createMediaCard(item, index) {
 
     if (item.mime.startsWith('image/')) {
         const img = document.createElement('img');
-        img.src = `/thumb/${item.filename}`;
+        img.src = `/thumb/${item.relative_path}`;
         img.alt = item.filename;
         img.loading = 'lazy';
         preview.appendChild(img);
@@ -181,6 +300,34 @@ function createMediaCard(item, index) {
 
     card.appendChild(preview);
     card.appendChild(badge);
+    card.appendChild(info);
+    return card;
+}
+
+function createAlbumCard(album) {
+    const card = document.createElement('button');
+    card.className = 'media-card album-card';
+    card.type = 'button';
+    card.setAttribute('aria-label', album.label);
+    card.addEventListener('click', () => {
+        state.currentAlbum = album.path;
+        renderGallery();
+    });
+
+    const preview = document.createElement('div');
+    preview.className = 'media-preview album-preview';
+    preview.innerHTML = `<div class="album-icon">📁</div>`;
+
+    const info = document.createElement('div');
+    info.className = 'media-info';
+    const title = document.createElement('strong');
+    title.textContent = album.label;
+    const subtitle = document.createElement('small');
+    subtitle.textContent = `${album.count} elementi`;
+    info.appendChild(title);
+    info.appendChild(subtitle);
+
+    card.appendChild(preview);
     card.appendChild(info);
     return card;
 }
@@ -216,29 +363,59 @@ function handleFileSelect(event) {
     event.target.value = '';
 }
 
-async function uploadFiles(files) {
+function chunkFiles(files, size) {
+    const result = [];
+    for (let i = 0; i < files.length; i += size) {
+        result.push(files.slice(i, i + size));
+    }
+    return result;
+}
+
+async function uploadBatch(files, batchIndex, batchCount, totalCount) {
     const formData = new FormData();
-    files.forEach(file => formData.append('files', file));
-    uploadStatus.textContent = 'Caricamento in corso...';
+    files.forEach(file => formData.append('files', file, file.webkitRelativePath || file.name));
+
+    const response = await fetch('/upload', { method: 'POST', body: formData });
+    if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Errore server ${response.status}: ${response.statusText} - ${text}`);
+    }
+
+    const result = await response.json();
+    if (!result.success) {
+        throw new Error(result.error || 'Errore durante il caricamento del batch.');
+    }
+
+    uploadStatus.textContent = `Batch ${batchIndex}/${batchCount} caricato, ${result.uploaded.length} file. Totale: ${totalCount}.`;
+    return result;
+}
+
+async function uploadFiles(files) {
+    if (!files.length) return;
+    const chunkSize = 40;
+    const batches = chunkFiles(files, chunkSize);
     uploadStatus.classList.add('active');
 
     try {
-        const response = await fetch('/upload', { method: 'POST', body: formData });
-        const result = await response.json();
-        if (result.success) {
-            uploadStatus.textContent = `Caricati ${result.uploaded.length} file.`;
-            await loadMedia();
-        } else {
-            uploadStatus.textContent = 'Errore durante il caricamento.';
+        let uploadedTotal = 0;
+        for (let i = 0; i < batches.length; i += 1) {
+            const batch = batches[i];
+            uploadStatus.textContent = `Caricamento batch ${i + 1}/${batches.length} (${uploadedTotal}/${files.length})...`;
+            const result = await uploadBatch(batch, i + 1, batches.length, files.length);
+            uploadedTotal += result.uploaded.length;
         }
-    } catch (error) {
-        uploadStatus.textContent = 'Errore di connessione.';
-    }
 
-    setTimeout(() => {
-        uploadStatus.textContent = '';
-        uploadStatus.classList.remove('active');
-    }, 3000);
+        uploadStatus.textContent = `Caricati ${uploadedTotal} file con successo.`;
+        await loadMedia();
+    } catch (error) {
+        console.error('Upload failed:', error);
+        uploadStatus.textContent = `Errore upload: ${error.message}`;
+    } finally {
+        setTimeout(() => {
+            uploadStatus.textContent = '';
+            uploadStatus.classList.remove('active');
+        }, 4000);
+    }
 }
 
 function openLightbox(index) {
@@ -248,36 +425,53 @@ function openLightbox(index) {
     lightbox.setAttribute('aria-hidden', 'false');
 }
 
-function closeLightbox() {
-    lightbox.classList.remove('visible');
-    lightbox.setAttribute('aria-hidden', 'true');
-}
-
-function navigateLightbox(direction) {
-    const items = filterItems();
-    state.currentLightboxIndex = (state.currentLightboxIndex + direction + items.length) % items.length;
-    renderLightbox();
-}
-
 function renderLightbox() {
-    const items = filterItems();
+    const items = getVisibleMediaItems();
+    if (!items.length) return;
     const item = items[state.currentLightboxIndex];
-    if (!item) return;
+    lightboxContent.innerHTML = '';
+
+    if (item.mime.startsWith('image/')) {
+        const img = document.createElement('img');
+        img.src = `/media/${item.relative_path}`;
+        img.alt = item.filename;
+        lightboxContent.appendChild(img);
+    } else if (item.mime.startsWith('video/')) {
+        const video = document.createElement('video');
+        video.controls = true;
+        const src = document.createElement('source');
+        src.src = `/media/${item.relative_path}`;
+        src.type = item.mime;
+        video.appendChild(src);
+        lightboxContent.appendChild(video);
+    } else {
+        const audio = document.createElement('audio');
+        audio.controls = true;
+        const src = document.createElement('source');
+        src.src = `/media/${item.relative_path}`;
+        src.type = item.mime;
+        audio.appendChild(src);
+        lightboxContent.appendChild(audio);
+    }
 
     lightboxTitle.textContent = item.filename;
     lightboxMeta.innerHTML = `
         <p><strong>Tipo:</strong> ${item.mime}</p>
+        <p><strong>Cartella:</strong> ${item.folder || 'Radice'}</p>
         <p><strong>Dimensione:</strong> ${Math.round(item.size / 1024)} KB</p>
-        <p><strong>Data:</strong> ${parseItemDate(item).toLocaleString('it-IT')}</p>
     `;
+}
 
-    if (item.mime.startsWith('image/')) {
-        lightboxContent.innerHTML = `<img src="/media/${item.filename}" alt="${item.filename}">`;
-    } else if (item.mime.startsWith('video/')) {
-        lightboxContent.innerHTML = `<video controls autoplay src="/media/${item.filename}"></video>`;
-    } else {
-        lightboxContent.innerHTML = `<audio controls src="/media/${item.filename}"></audio>`;
-    }
+function navigateLightbox(direction) {
+    const items = getVisibleMediaItems();
+    if (!items.length) return;
+    state.currentLightboxIndex = (state.currentLightboxIndex + direction + items.length) % items.length;
+    renderLightbox();
+}
+
+function closeLightbox() {
+    lightbox.classList.remove('visible');
+    lightbox.setAttribute('aria-hidden', 'true');
 }
 
 document.addEventListener('DOMContentLoaded', loadMedia);

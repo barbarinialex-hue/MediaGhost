@@ -19,7 +19,7 @@
             <input id="search-input" type="search" placeholder="Cerca immagini, video, audio...">
         </div>
         <div class="actions">
-            <button id="select-files-btn" class="primary">Importa file</button>
+            <button id="select-files-btn" class="primary">Importa cartella/file</button>
             <select id="sort-by" aria-label="Ordina">
                 <option value="newest">Più recenti</option>
                 <option value="oldest">Più vecchi</option>
@@ -29,6 +29,10 @@
     </header>
 
     <section class="toolbar">
+        <div class="folder-path-row">
+            <input id="folder-path-input" type="text" placeholder="Percorso cartella locale da visualizzare">
+            <button id="set-folder-btn" class="primary">Apri cartella</button>
+        </div>
         <div class="filter-row">
             <button class="filter-chip active" data-type="">Tutti</button>
             <button class="filter-chip" data-type="image/">Immagini</button>
@@ -44,6 +48,7 @@
     </section>
 
     <main>
+        <div id="breadcrumb" class="breadcrumb"></div>
         <div id="gallery"></div>
     </main>
 
@@ -63,7 +68,7 @@
         </div>
     </div>
 
-    <input id="file-input" type="file" accept="image/*,video/*,audio/*" multiple hidden>
+    <input id="file-input" type="file" webkitdirectory mozdirectory directory accept="image/*,video/*,audio/*" multiple hidden>
     <div id="upload-status" class="upload-status"></div>
     <script src="js/main.js"></script>
 </body>

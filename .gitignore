@@ -1,0 +1,13 @@
+# Python cache
+**/__pycache__/
+**/*.pyc
+
+# Local media folder not part of source control
+WA-Media-Viewer/media_folder/
+
+# Temporary thumbnails storage
+*.tmp
+
+# Editor/temp files
+*.swp
+*.swo
