@@ -7,21 +7,64 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <h1>DeepView - Galleria Media</h1>
-    <div id="filters">
-        <select id="filter-type">
-            <option value="">Tutti</option>
-            <option value="image/">Immagini</option>
-            <option value="video/">Video</option>
-            <option value="audio/">Audio</option>
-        </select>
-        <input type="date" id="filter-date">
+    <header class="topbar">
+        <div class="brand">
+            <span class="brand-mark">D</span>
+            <div>
+                <strong>DeepView</strong>
+                <small>Galleria multimediale</small>
+            </div>
+        </div>
+        <div class="search-group">
+            <input id="search-input" type="search" placeholder="Cerca immagini, video, audio...">
+        </div>
+        <div class="actions">
+            <button id="select-files-btn" class="primary">Importa file</button>
+            <select id="sort-by" aria-label="Ordina">
+                <option value="newest">Più recenti</option>
+                <option value="oldest">Più vecchi</option>
+                <option value="name">Nome</option>
+            </select>
+        </div>
+    </header>
+
+    <section class="toolbar">
+        <div class="filter-row">
+            <button class="filter-chip active" data-type="">Tutti</button>
+            <button class="filter-chip" data-type="image/">Immagini</button>
+            <button class="filter-chip" data-type="video/">Video</button>
+            <button class="filter-chip" data-type="audio/">Audio</button>
+        </div>
+        <div class="stats-row">
+            <span id="total-count">0 elementi</span>
+            <span id="image-count">0 immagini</span>
+            <span id="video-count">0 video</span>
+            <span id="audio-count">0 audio</span>
+        </div>
+    </section>
+
+    <main>
+        <div id="gallery"></div>
+    </main>
+
+    <div id="lightbox" class="hidden" aria-hidden="true">
+        <div class="lightbox-backdrop"></div>
+        <div class="lightbox-panel">
+            <button id="lightbox-close" class="icon-btn">✕</button>
+            <button id="lightbox-prev" class="nav-btn">◀</button>
+            <button id="lightbox-next" class="nav-btn">▶</button>
+            <div class="lightbox-body">
+                <div id="lightbox-content"></div>
+                <div class="lightbox-info">
+                    <h2 id="lightbox-title"></h2>
+                    <div id="lightbox-meta"></div>
+                </div>
+            </div>
+        </div>
     </div>
-    <div id="gallery"></div>
-    <div id="load-more"></div>
-    <div id="lightbox">
-        <div id="lightbox-content"></div>
-    </div>
+
+    <input id="file-input" type="file" accept="image/*,video/*,audio/*" multiple hidden>
+    <div id="upload-status" class="upload-status"></div>
     <script src="js/main.js"></script>
 </body>
 </html>
